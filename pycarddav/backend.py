@@ -24,10 +24,9 @@
 The SQLite backend implementation.
 
 Database Layout
-===============
 
-current version number: 6
-tables: version, vcardtable, properties, blobproperties
+current version number: 10
+tables: version, vcardtable
 
 version:
     version (INT): only one line: current db version
@@ -42,8 +41,7 @@ vcardtable:
         * 1: NEW; new card, needs to be created on the server
         * 2: CHANGED; properties edited or added (news to be pushed to server)
         * 9: DELETED; marked for deletion (needs to be deleted on server)
-    vcard (TEXT) the content of the vcard minus any binary objects
-                as __repr__() of the object
+    vcard (TEXT) the content of the vcard as __repr__() of the object
 
 """
 
@@ -107,7 +105,7 @@ class SQLiteDb(object):
         """tests for curent db Version
         if the table is still empty, insert db_version
         """
-        database_version = 7  # the current db VERSION
+        database_version = 10  # the current db VERSION
         #try:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -191,7 +189,7 @@ class SQLiteDb(object):
         """insert a new or update an existing card in the db
 
         :param vcard: vcard to be inserted or updated
-        :type vcard: model.VCard()
+        :type vcard: model.VCard() or unicode() (an actual vcard)
         :param href: href of the card on the server, if this href already
                      exists in the db the card gets updated. If no href is
                      given, a random href is chosen and it is implied that this
@@ -217,8 +215,11 @@ class SQLiteDb(object):
                       BACKEND.DELETED
 
         """
-        if isinstance(vcard, (str, unicode)):
+        if isinstance(vcard, (str, unicode)):  # unicode for py2, str for py3
+            vcard_s = vcard.decode('utf-8')
             vcard = model.vcard_from_string(vcard)
+        else:
+            vcard_s = vcard.vcf
 
         if self.href_exists(href):  # existing card
             vcard_s = vcard.serialize()
@@ -236,7 +237,6 @@ class SQLiteDb(object):
                     # could not find a (random) href that's not yet in the db
                     # broken random number generator?
                     #TODO: what's happens now? exception?
-            vcard_s = vcard.serialize()
             stuple = (href, etag, vcard.name, vcard.fname, vcard_s, status)
             sql_s = ('INSERT INTO vcardtable '
                      '(href, etag, name, fname, vcard, status) '
@@ -324,7 +324,7 @@ class SQLiteDb(object):
         """returns a VCard()"""
         sql_s = 'SELECT vcard FROM vcardtable WHERE href=(?)'
         result = self.sql_ex(sql_s, (href, ))
-        vcard = model.VCard(ast.literal_eval(result[0][0]))
+        vcard = model.vcard_from_string(result[0][0])
         vcard.href = href
         return vcard
 
