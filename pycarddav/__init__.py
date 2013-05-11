@@ -29,6 +29,7 @@ import logging
 import os
 import signal
 import sys
+import xdg.BaseDirectory
 
 from netrc import netrc
 from urlparse import urlsplit
@@ -49,23 +50,6 @@ def capture_user_interruption():
     pressing Ctrl-C.
     """
     signal.signal(signal.SIGINT, lambda x, y: sys.exit(0))
-
-
-class XdgBaseDirectoryHelper(object):
-    def __init__(self):
-        self._home = os.path.expanduser('~')
-
-        self.config_dirs = [os.environ.get('XDG_CONFIG_HOME') or \
-            os.path.join(self._home, '.config')]
-        self.config_dirs.extend(
-            (os.environ.get('XDG_CONFIG_DIRS') or '/etc/xdg').split(':'))
-        self.data_dirs = [os.environ.get('XDG_DATA_HOME') or \
-            os.path.join(self._home, '.local', 'share')]
-        self.data_dirs.extend(
-            (os.environ.get('XDG_DATA_DIRS') or '/usr/local/share:/usr/share').split(':'))
-
-    def build_config_paths(self, resource):
-        return [os.path.join(d, resource) for d in self.config_dirs]
 
 
 class Namespace(dict):
@@ -211,8 +195,6 @@ class ConfigurationParser(object):
     DEFAULT_FILE = "pycard.conf"
 
     def __init__(self, desc, check_accounts=True):
-        self._xdg_helper = XdgBaseDirectoryHelper()
-
         # Set the configuration current schema.
         self._sections = [ AccountSection, SQLiteSection ]
 
@@ -428,7 +410,8 @@ class ConfigurationParser(object):
 
         resource = os.path.join(
             ConfigurationParser.DEFAULT_PATH, ConfigurationParser.DEFAULT_FILE)
-        paths.extend(self._xdg_helper.build_config_paths(resource))
+        paths.extend([os.path.join(path, resource)
+            for path in xdg.BaseDirectory.xdg_config_dirs])
         paths.append(os.path.expanduser(os.path.join('~', '.' + resource)))
         paths.append(os.path.expanduser(ConfigurationParser.DEFAULT_FILE))
 
